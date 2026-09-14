@@ -148,8 +148,9 @@ php make_module.php <name> --description="..." --services=mysql,redis
 ```
 
 `<name>` is the kebab-case package name; the namespace is derived as
-`EzPhp\<PascalCase>` unless `--namespace=` overrides it (`bignum` → `BigNum` and
-`opcache` → `OPCache` are existing exceptions the guess gets wrong).
+`EzPhp\<PascalCase>` unless `--namespace=` overrides it (`bignum` → `BigNum`,
+`opcache` → `OPCache`, and `dotenv` → `Env` are existing exceptions the guess
+gets wrong).
 
 To bring in a module whose code already lives in its own repository instead of
 generating a fresh skeleton, pass `--repo=` with a git URL:
@@ -221,6 +222,8 @@ Only set a port for services the module actually uses. Modules without external 
 > The `MEILISEARCH_PORT` column is the **host** port. Inside a Compose network the service is always reachable at `http://meilisearch:7700` regardless of the host mapping — only publish-side ports need to be unique.
 
 > The "Redis host port" column is likewise the **host**-published port. `ez-php/cache`, `ez-php/queue`, and `ez-php/rate-limiter` map it through a separate `REDIS_HOST_PORT` env var in `docker-compose.yml`, keeping `REDIS_PORT` fixed at `6379` for in-container connections (the app container always reaches Redis at `redis:6379` over the Compose network, regardless of the host mapping) — the root project is the one exception, since it has no host/container split and uses `REDIS_PORT` for both.
+
+> This table tracks only MySQL, Redis, and Meilisearch ports — the three services shared across multiple modules where a collision is otherwise easy to introduce. `ez-php/mail`'s Mailpit service is the one other module with published host ports: SMTP `1025` and web UI `8025`, mapped through `MAILPIT_SMTP_HOST_PORT`/`MAILPIT_API_HOST_PORT` in `modules/mail/docker-compose.yml` (mirroring the `*_HOST_PORT` pattern above), documented in `modules/mail/.env.example`. It isn't a table column because no other module runs Mailpit, so there is nothing to collide with — but a new module adding its own single-use service's ports should likewise parameterize them and document the defaults in its own `.env.example` rather than adding a column here.
 
 ### 5 — Monorepo scripts
 
@@ -327,14 +330,16 @@ tests/
   concerns. `Pusher::sendToMany()` surfaces a `PushException` per failed
   token (e.g. APNS `410 Unregistered`) so the caller can decide what to do
   with it, but this package never persists a token.
-- **Not wired as a `ez-php/notification` channel.** The idea that prompted
-  this module (`EZ_PHP_IDEAS.md`) frames it as "push notifications as a
-  notification channel," but building the `ChannelInterface`/
-  `QueuableChannelInterface` adapter (which would live in
-  `modules/notification/src/Channel/`, alongside `BroadcastChannel`) is a
-  separate, not-yet-scoped task — this module only ships the
-  transport-level `Pusher`/drivers, mirroring how `ez-php/broadcast` predates
-  `notification`'s `BroadcastChannel`.
+- **Wired as an `ez-php/notification` channel via `PushChannel`.** This
+  module only ships the transport-level `Pusher`/drivers and the `Push`
+  facade — mirroring how `ez-php/broadcast` predates and is independent of
+  `notification`'s `BroadcastChannel`. The `ChannelInterface`/
+  `QueuableChannelInterface` adapter lives in
+  `modules/notification/src/Channel/PushChannel.php` (with
+  `Channel/ToPushInterface.php` and `Queue/SendPushNotificationJob.php`
+  alongside it), which calls the `Push` facade — `ez-php/notification`
+  depends on `ez-php/push`, not the other way around, so this module stays
+  usable standalone without pulling in notification orchestration.
 - **`modules/push/` is intended to become a git submodule** pointing at
   `git@github.com:ez-php/push.git`, consistent with how every other
   `modules/*` package (and `framework/`, `ez-php/`) is tracked in this
@@ -374,7 +379,7 @@ tests/
 |---|---|
 | Device-token storage and lifecycle (register/prune) | Application layer |
 | FCM topic subscription management | Application layer |
-| The `ChannelInterface`/`QueuableChannelInterface` adapter wiring this into notifications | A future addition to `ez-php/notification` (`Channel/PushChannel.php`), not this package |
+| The `ChannelInterface`/`QueuableChannelInterface` adapter wiring this into notifications | `ez-php/notification` (`Channel/PushChannel.php`), not this package |
 | Rich notification content (images, action buttons, interruption levels) | Application layer — extend `PushMessage`'s `data` map or the driver payload builder if a real need arises |
 | A general-purpose JWT library | `Es256Signer`/`Rs256Signer` are intentionally narrow; see Design Decisions |
 | SMS / web push / other channels | Application layer or their own future modules |
