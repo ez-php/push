@@ -71,6 +71,17 @@ final class Es256SignerTest extends TestCase
         );
     }
 
+    public function testSignOmitsTheKidHeaderWhenNoKeyIdIsGiven(): void
+    {
+        $signer = new Es256Signer($this->privateKeyPem);
+
+        $header = json_decode(self::base64UrlDecode(explode('.', $signer->sign(['iss' => 'x']))[0]), true);
+
+        $this->assertIsArray($header);
+        $this->assertSame('ES256', $header['alg']);
+        $this->assertArrayNotHasKey('kid', $header);
+    }
+
     public function testSignThrowsOnInvalidPrivateKey(): void
     {
         $signer = new Es256Signer('not a valid pem key', 'KEY123');

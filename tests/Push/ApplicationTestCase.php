@@ -49,6 +49,11 @@ abstract class ApplicationTestCase extends EzPhpApplicationTestCase
                     'client_email' => getenv('PUSH_FCM_CLIENT_EMAIL') ?: '',
                     'private_key' => getenv('PUSH_FCM_PRIVATE_KEY') ?: '',
                 ],
+                'webpush' => [
+                    'private_key' => getenv('PUSH_WEBPUSH_PRIVATE_KEY') ?: '',
+                    'subject' => getenv('PUSH_WEBPUSH_SUBJECT') ?: '',
+                    'ttl' => (int) (getenv('PUSH_WEBPUSH_TTL') ?: 86400),
+                ],
             ];
             PHP;
 

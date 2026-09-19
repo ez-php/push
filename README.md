@@ -3,7 +3,7 @@
 Mobile push notifications for ez-php applications. Delivers a `PushMessage` to a
 device token through a pluggable driver — APNS (Apple, HTTP/2 provider API with
 token-based `.p8` authentication) or FCM (Firebase Cloud Messaging, HTTP v1 API
-with service-account OAuth2) — plus Null and Array drivers for local development
+with service-account OAuth2), or Web Push (browsers, VAPID + RFC 8291 encryption) — plus Null and Array drivers for local development
 and testing.
 
 Device-token storage, invalid-token pruning, and topic/channel subscription
@@ -52,6 +52,11 @@ return [
         'client_email' => env('PUSH_FCM_CLIENT_EMAIL', ''),
         'private_key' => env('PUSH_FCM_PRIVATE_KEY', ''),
     ],
+    'webpush' => [
+        'private_key' => env('PUSH_WEBPUSH_PRIVATE_KEY', ''),
+        'subject' => env('PUSH_WEBPUSH_SUBJECT', ''),
+        'ttl' => (int) env('PUSH_WEBPUSH_TTL', 86400),
+    ],
 ];
 ```
 
@@ -92,6 +97,7 @@ foreach ($results as $token => $error) {
 | Array  | `array`       | Stores notifications in memory — designed for testing |
 | APNS   | `apns`        | Apple Push Notification service, HTTP/2 provider API |
 | FCM    | `fcm`         | Firebase Cloud Messaging, HTTP v1 API |
+| Web Push | `webpush`   | Browser push (VAPID), encrypted per RFC 8291 |
 
 ### APNS Driver
 
@@ -123,6 +129,31 @@ PUSH_FCM_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY----
 service-account JSON key (Project Settings → Service Accounts → Generate new
 private key). The driver exchanges an RS256-signed JWT-bearer assertion for an
 OAuth2 access token and caches it for its ~1-hour lifetime.
+
+### Web Push Driver
+
+```dotenv
+PUSH_DRIVER=webpush
+PUSH_WEBPUSH_PRIVATE_KEY="-----BEGIN EC PRIVATE KEY-----\n...\n-----END EC PRIVATE KEY-----"
+PUSH_WEBPUSH_SUBJECT=mailto:ops@example.com
+PUSH_WEBPUSH_TTL=86400
+```
+
+`PUSH_WEBPUSH_PRIVATE_KEY` is your VAPID key: a P-256 EC private key in PEM form
+(`openssl ecparam -genkey -name prime256v1 -noout`). Give the browser the matching
+public key when subscribing — `WebPushDriver::vapidPublicKey($pem)` returns it in the
+base64url form `pushManager.subscribe({applicationServerKey})` expects.
+
+The "device token" is the browser's `PushSubscription` as JSON — store
+`JSON.stringify(subscription)` and pass it to `Push::send()`:
+
+```php
+Push::send($subscriptionJson, new PushMessage('Order shipped', 'On its way', ['order_id' => '42']));
+```
+
+The service worker receives `{"title", "body", "data", "badge"?, "sound"?}`. Payloads are
+encrypted per RFC 8291 (max 4079 bytes). A `404`/`410` from the push service means the
+subscription is gone — a `PushException` is raised; dropping the subscription is up to you.
 
 ### Array Driver (for Testing)
 
@@ -167,11 +198,11 @@ Implement `PushDriverInterface` to add a custom backend:
 use EzPhp\Push\PushDriverInterface;
 use EzPhp\Push\PushMessage;
 
-final class WebPushDriver implements PushDriverInterface
+final class SmsDriver implements PushDriverInterface
 {
     public function send(string $token, PushMessage $message): void
     {
-        // deliver via a Web Push provider
+        // deliver via your own provider
     }
 }
 ```
@@ -179,7 +210,7 @@ final class WebPushDriver implements PushDriverInterface
 Bind it in a service provider:
 
 ```php
-$app->bind(PushDriverInterface::class, fn () => new WebPushDriver());
+$app->bind(PushDriverInterface::class, fn () => new SmsDriver());
 ```
 
 ---

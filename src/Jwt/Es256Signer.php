@@ -29,12 +29,12 @@ final class Es256Signer
     /**
      * Es256Signer Constructor
      *
-     * @param string $privateKeyPem PEM-encoded EC private key (APNS .p8 auth key contents).
-     * @param string $keyId         APNS key ID (the `kid` header claim).
+     * @param string      $privateKeyPem PEM-encoded EC private key (APNS .p8 auth key contents).
+     * @param string|null $keyId    APNS key ID (the `kid` header claim); null omits `kid` (e.g. VAPID JWTs).
      */
     public function __construct(
         private readonly string $privateKeyPem,
-        private readonly string $keyId,
+        private readonly ?string $keyId = null,
     ) {
     }
 
@@ -49,7 +49,11 @@ final class Es256Signer
      */
     public function sign(array $claims): string
     {
-        $header = ['alg' => 'ES256', 'typ' => 'JWT', 'kid' => $this->keyId];
+        $header = ['alg' => 'ES256', 'typ' => 'JWT'];
+
+        if ($this->keyId !== null) {
+            $header['kid'] = $this->keyId;
+        }
 
         $signingInput = self::base64UrlEncode((string) json_encode($header, JSON_THROW_ON_ERROR))
             . '.' . self::base64UrlEncode((string) json_encode($claims, JSON_THROW_ON_ERROR));

@@ -268,9 +268,12 @@ src/
 │   ├── NullDriver.php              — Discards all notifications (default)
 │   ├── ArrayDriver.php             — Records sent messages in-memory, for tests
 │   ├── ApnsDriver.php              — Apple Push Notification service, HTTP/2 provider API
-│   └── FcmDriver.php               — Firebase Cloud Messaging, HTTP v1 API
+│   ├── FcmDriver.php               — Firebase Cloud Messaging, HTTP v1 API
+│   └── WebPushDriver.php           — Browser Web Push: VAPID-authenticated, RFC 8291-encrypted POST to the subscription endpoint
+├── WebPush/
+│   └── WebPushEncryptor.php        — RFC 8291 aes128gcm payload encryption (ECDH P-256 + HKDF + AES-128-GCM)
 └── Jwt/
-    ├── Es256Signer.php             — ES256 JWT signing for APNS provider tokens (ECDSA P-256)
+    ├── Es256Signer.php             — ES256 JWT signing for APNS provider tokens and VAPID (kid optional)
     └── Rs256Signer.php             — RS256 JWT signing for FCM's OAuth2 JWT-bearer assertion
 
 tests/
@@ -284,7 +287,10 @@ tests/
 │   ├── NullDriverTest.php
 │   ├── ArrayDriverTest.php
 │   ├── ApnsDriverTest.php          — Uses FakeTransport, a generated throwaway EC key
-│   └── FcmDriverTest.php           — Uses FakeTransport, a generated throwaway RSA key
+│   ├── FcmDriverTest.php           — Uses FakeTransport, a generated throwaway RSA key
+│   └── WebPushDriverTest.php       — FakeTransport, generated VAPID + subscription keys
+├── WebPush/
+│   └── WebPushEncryptorTest.php    — Reproduces the RFC 8291 Appendix A vector byte for byte
 └── Jwt/
     ├── Es256SignerTest.php         — Round-trips a raw signature back to DER and verifies it
     └── Rs256SignerTest.php
@@ -314,6 +320,21 @@ tests/
   a Google access token (cached ~55 minutes), then POSTs to
   `fcm.googleapis.com/v1/projects/{id}/messages:send` with that token as a
   bearer credential.
+- **`WebPushDriver`** — sends to browser push services. The "device token" is
+  the browser's `PushSubscription` serialised as JSON (`endpoint`,
+  `keys.p256dh`, `keys.auth`). It encrypts the JSON payload
+  (`title`/`body`/`data`, plus `badge`/`sound` when set) with `WebPushEncryptor`
+  and POSTs it with `Content-Encoding: aes128gcm`, a `TTL`, and
+  `Authorization: vapid t=<jwt>, k=<public key>`. The VAPID JWT (`aud` =
+  endpoint origin, `sub`, `exp` = now + 12 h) is signed per send with
+  `Es256Signer` (no `kid`). `WebPushDriver::vapidPublicKey($privateKeyPem)`
+  derives the base64url public key — also the `applicationServerKey` the browser
+  needs to subscribe. Any non-2xx (404/410 = subscription gone) raises a
+  `PushException` naming the status.
+- **`WebPushEncryptor`** — RFC 8291 message encryption: ephemeral ECDH P-256
+  against `p256dh`, HKDF-SHA-256 (`hash_hkdf`) mixed with the `auth` secret,
+  AES-128-GCM, single 4096-byte record. `ext-openssl` only (`openssl_pkey_derive`,
+  `openssl_encrypt`); raw scalars are wrapped into SEC1/SPKI DER by hand.
 - **`Es256Signer` / `Rs256Signer`** — minimal, single-purpose JWT signers built
   on `ext-openssl`, not a general JWT library. `Es256Signer` additionally
   converts `openssl_sign()`'s ASN.1 DER ECDSA output into the raw, fixed-width
@@ -331,6 +352,18 @@ tests/
   negotiate it — no explicit `CURLOPT_HTTP_VERSION` is set here. If cURL/the
   server ever fail to negotiate HTTP/2 automatically, that belongs in
   `ez-php/http-client`, not this package.
+- **Web Push is single-record and non-streaming.** Payloads are limited to 4079
+  bytes (one record, the size every push service must accept); larger payloads
+  raise `PushException` rather than being split. The `$senderPrivateKey`/`$salt`
+  parameters of `WebPushEncryptor::encrypt()` exist only to reproduce the RFC
+  test vector — production callers must omit them (reusing an ephemeral key or
+  salt breaks the scheme's security). Only the current `vapid` Authorization
+  scheme is sent, not the legacy `WebPush`/`Crypto-Key` pair, and only
+  `aes128gcm` (not the obsolete `aesgcm` coding). No JWT caching: signing ES256
+  per send is cheap and keeps the driver stateless.
+- **The reserved `kid` argument became optional on `Es256Signer`.** VAPID JWTs
+  carry no `kid`; `new Es256Signer($pem)` omits it, `new Es256Signer($pem, $keyId)`
+  (APNS) is unchanged.
 - **No JWT library dependency.** `Es256Signer`/`Rs256Signer` are scoped to
   exactly the two algorithms APNS and FCM require, not a general-purpose JWT
   implementation — `ez-php/auth`'s `JwtManager` (HS256 only, for session
@@ -393,4 +426,5 @@ tests/
 | The `ChannelInterface`/`QueuableChannelInterface` adapter wiring this into notifications | `ez-php/notification` (`Channel/PushChannel.php`), not this package |
 | Rich notification content (images, action buttons, interruption levels) | Application layer — extend `PushMessage`'s `data` map or the driver payload builder if a real need arises |
 | A general-purpose JWT library | `Es256Signer`/`Rs256Signer` are intentionally narrow; see Design Decisions |
-| SMS / web push / other channels | Application layer or their own future modules |
+| Storing `PushSubscription`s, pruning 404/410 subscriptions, service-worker code | Application layer |
+| SMS / other channels | Application layer or their own future modules |

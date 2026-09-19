@@ -10,6 +10,7 @@ use EzPhp\Push\Driver\ApnsDriver;
 use EzPhp\Push\Driver\ArrayDriver;
 use EzPhp\Push\Driver\FcmDriver;
 use EzPhp\Push\Driver\NullDriver;
+use EzPhp\Push\Driver\WebPushDriver;
 use EzPhp\Push\Push;
 use EzPhp\Push\PushDriverInterface;
 use EzPhp\Push\Pusher;
@@ -31,12 +32,15 @@ use Tests\Push\ApplicationTestCase;
 #[UsesClass(ArrayDriver::class)]
 #[UsesClass(ApnsDriver::class)]
 #[UsesClass(FcmDriver::class)]
+#[UsesClass(WebPushDriver::class)]
+#[UsesClass(\EzPhp\Push\Jwt\Es256Signer::class)]
+#[UsesClass(\EzPhp\Push\WebPush\WebPushEncryptor::class)]
 #[UsesClass(PushMessage::class)]
 final class PushServiceProviderTest extends ApplicationTestCase
 {
     protected function setUp(): void
     {
-        foreach (['PUSH_DRIVER', 'PUSH_APNS_KEY_ID', 'PUSH_APNS_TEAM_ID', 'PUSH_APNS_BUNDLE_ID', 'PUSH_APNS_PRIVATE_KEY', 'PUSH_APNS_SANDBOX', 'PUSH_FCM_PROJECT_ID', 'PUSH_FCM_CLIENT_EMAIL', 'PUSH_FCM_PRIVATE_KEY'] as $var) {
+        foreach (['PUSH_DRIVER', 'PUSH_APNS_KEY_ID', 'PUSH_APNS_TEAM_ID', 'PUSH_APNS_BUNDLE_ID', 'PUSH_APNS_PRIVATE_KEY', 'PUSH_APNS_SANDBOX', 'PUSH_FCM_PROJECT_ID', 'PUSH_FCM_CLIENT_EMAIL', 'PUSH_FCM_PRIVATE_KEY', 'PUSH_WEBPUSH_PRIVATE_KEY', 'PUSH_WEBPUSH_SUBJECT', 'PUSH_WEBPUSH_TTL'] as $var) {
             putenv($var . '=');
         }
 
@@ -47,7 +51,7 @@ final class PushServiceProviderTest extends ApplicationTestCase
 
     protected function tearDown(): void
     {
-        foreach (['PUSH_DRIVER', 'PUSH_APNS_KEY_ID', 'PUSH_APNS_TEAM_ID', 'PUSH_APNS_BUNDLE_ID', 'PUSH_APNS_PRIVATE_KEY', 'PUSH_APNS_SANDBOX', 'PUSH_FCM_PROJECT_ID', 'PUSH_FCM_CLIENT_EMAIL', 'PUSH_FCM_PRIVATE_KEY'] as $var) {
+        foreach (['PUSH_DRIVER', 'PUSH_APNS_KEY_ID', 'PUSH_APNS_TEAM_ID', 'PUSH_APNS_BUNDLE_ID', 'PUSH_APNS_PRIVATE_KEY', 'PUSH_APNS_SANDBOX', 'PUSH_FCM_PROJECT_ID', 'PUSH_FCM_CLIENT_EMAIL', 'PUSH_FCM_PRIVATE_KEY', 'PUSH_WEBPUSH_PRIVATE_KEY', 'PUSH_WEBPUSH_SUBJECT', 'PUSH_WEBPUSH_TTL'] as $var) {
             putenv($var . '=');
         }
 
@@ -114,6 +118,23 @@ final class PushServiceProviderTest extends ApplicationTestCase
         putenv('PUSH_FCM_PRIVATE_KEY=dummy-pem');
 
         $this->assertInstanceOf(FcmDriver::class, $this->app()->make(PushDriverInterface::class));
+    }
+
+    /**
+     * @return void
+     * @throws \ReflectionException
+     */
+    public function testWebPushDriverIsCreatedWhenConfigured(): void
+    {
+        $key = openssl_pkey_new(['private_key_type' => OPENSSL_KEYTYPE_EC, 'curve_name' => 'prime256v1']);
+        $this->assertNotFalse($key);
+        openssl_pkey_export($key, $pem);
+
+        putenv('PUSH_DRIVER=webpush');
+        putenv('PUSH_WEBPUSH_PRIVATE_KEY=' . $pem);
+        putenv('PUSH_WEBPUSH_SUBJECT=mailto:ops@example.com');
+
+        $this->assertInstanceOf(WebPushDriver::class, $this->app()->make(PushDriverInterface::class));
     }
 
     /**

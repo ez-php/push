@@ -12,8 +12,10 @@ use EzPhp\Push\Driver\ApnsDriver;
 use EzPhp\Push\Driver\ArrayDriver;
 use EzPhp\Push\Driver\FcmDriver;
 use EzPhp\Push\Driver\NullDriver;
+use EzPhp\Push\Driver\WebPushDriver;
 use EzPhp\Push\Jwt\Es256Signer;
 use EzPhp\Push\Jwt\Rs256Signer;
+use EzPhp\Push\WebPush\WebPushEncryptor;
 
 /**
  * Class PushServiceProvider
@@ -26,7 +28,7 @@ use EzPhp\Push\Jwt\Rs256Signer;
  * container.
  *
  * Configuration keys (in config/push.php or environment):
- *   - push.driver             — "null" (default) | "array" | "apns" | "fcm"
+ *   - push.driver             — "null" (default) | "array" | "apns" | "fcm" | "webpush"
  *   - push.apns.key_id        — APNS auth-key ID (the `kid` claim)
  *   - push.apns.team_id       — Apple Developer Team ID (the `iss` claim)
  *   - push.apns.bundle_id     — app bundle identifier (the `apns-topic` header)
@@ -35,6 +37,9 @@ use EzPhp\Push\Jwt\Rs256Signer;
  *   - push.fcm.project_id     — Firebase project ID
  *   - push.fcm.client_email   — service-account client email (the `iss` claim)
  *   - push.fcm.private_key    — PEM contents of the service-account private key
+ *   - push.webpush.private_key — PEM contents of the VAPID P-256 private key
+ *   - push.webpush.subject    — VAPID contact (`mailto:` or `https:` URL)
+ *   - push.webpush.ttl        — seconds a push service retains an undelivered message (default: 86400)
  *
  * @package EzPhp\Push
  */
@@ -56,6 +61,7 @@ final class PushServiceProvider extends ServiceProvider
                     'array' => new ArrayDriver(),
                     'apns' => $this->createApnsDriver($app, $config),
                     'fcm' => $this->createFcmDriver($app, $config),
+                    'webpush' => $this->createWebPushDriver($app, $config),
                     default => new NullDriver(),
                 };
             }
@@ -113,6 +119,31 @@ final class PushServiceProvider extends ServiceProvider
         $clientEmail = $this->configString($config, 'push.fcm.client_email');
 
         return new FcmDriver($client, new Rs256Signer($privateKey), $projectId, $clientEmail);
+    }
+
+    /**
+     * @param ContainerInterface $app
+     * @param ConfigInterface    $config
+     *
+     * @return WebPushDriver
+     */
+    private function createWebPushDriver(ContainerInterface $app, ConfigInterface $config): WebPushDriver
+    {
+        /** @var HttpClient $client */
+        $client = $app->make(HttpClient::class);
+
+        $privateKey = $this->configString($config, 'push.webpush.private_key');
+        $subject = $this->configString($config, 'push.webpush.subject');
+        $ttl = $config->get('push.webpush.ttl', 86_400);
+
+        return new WebPushDriver(
+            $client,
+            new Es256Signer($privateKey),
+            WebPushDriver::vapidPublicKey($privateKey),
+            $subject,
+            new WebPushEncryptor(),
+            is_int($ttl) && $ttl >= 0 ? $ttl : 86_400,
+        );
     }
 
     /**
