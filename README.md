@@ -39,23 +39,23 @@ Add configuration to `config/push.php`:
 
 ```php
 return [
-    'driver' => env('PUSH_DRIVER', 'null'),
+    'driver' => getenv('PUSH_DRIVER') ?: 'null',
     'apns' => [
-        'key_id' => env('PUSH_APNS_KEY_ID', ''),
-        'team_id' => env('PUSH_APNS_TEAM_ID', ''),
-        'bundle_id' => env('PUSH_APNS_BUNDLE_ID', ''),
-        'private_key' => env('PUSH_APNS_PRIVATE_KEY', ''),
-        'sandbox' => env('PUSH_APNS_SANDBOX', false),
+        'key_id' => getenv('PUSH_APNS_KEY_ID') ?: '',
+        'team_id' => getenv('PUSH_APNS_TEAM_ID') ?: '',
+        'bundle_id' => getenv('PUSH_APNS_BUNDLE_ID') ?: '',
+        'private_key' => getenv('PUSH_APNS_PRIVATE_KEY') ?: '',
+        'sandbox' => filter_var(getenv('PUSH_APNS_SANDBOX'), FILTER_VALIDATE_BOOLEAN),
     ],
     'fcm' => [
-        'project_id' => env('PUSH_FCM_PROJECT_ID', ''),
-        'client_email' => env('PUSH_FCM_CLIENT_EMAIL', ''),
-        'private_key' => env('PUSH_FCM_PRIVATE_KEY', ''),
+        'project_id' => getenv('PUSH_FCM_PROJECT_ID') ?: '',
+        'client_email' => getenv('PUSH_FCM_CLIENT_EMAIL') ?: '',
+        'private_key' => getenv('PUSH_FCM_PRIVATE_KEY') ?: '',
     ],
     'webpush' => [
-        'private_key' => env('PUSH_WEBPUSH_PRIVATE_KEY', ''),
-        'subject' => env('PUSH_WEBPUSH_SUBJECT', ''),
-        'ttl' => (int) env('PUSH_WEBPUSH_TTL', 86400),
+        'private_key' => getenv('PUSH_WEBPUSH_PRIVATE_KEY') ?: '',
+        'subject' => getenv('PUSH_WEBPUSH_SUBJECT') ?: '',
+        'ttl' => (int) (getenv('PUSH_WEBPUSH_TTL') ?: 86400),
     ],
 ];
 ```
