@@ -18,6 +18,7 @@
   },
   "require": {
     "php": "^8.5",
+    "ext-openssl": "*",
     "ez-php/contracts": "^2.0",
     "ez-php/http-client": "^2.0"
   },
