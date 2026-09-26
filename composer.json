@@ -1,6 +1,6 @@
 {
   "name": "ez-php/push",
-  "version": "2.5.3",
+  "version": "2.5.4",
   "description": "Mobile push notifications (APNS, FCM) as an ez-php/notification channel",
   "type": "library",
   "license": "MIT",
