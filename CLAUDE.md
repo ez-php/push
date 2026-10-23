@@ -152,7 +152,7 @@ php make_module.php <name> --description="..." --services=mysql,redis --extensio
 `<name>` is the kebab-case package name; the namespace is derived as
 `EzPhp\<PascalCase>` (each `-`-separated word upper-cased) unless `--namespace=`
 overrides it. Existing exceptions the guess gets wrong: `bignum` → `BigNum`,
-`dataloader` → `DataLoader`, `dotenv` → `Env`, `graphql` → `GraphQL`, `oauth` → `OAuth`,
+`dataloader` → `DataLoader`, `dotenv` → `Env`, `graphql` → `GraphQL`, `graphql-subscriptions` → `GraphQLSubscriptions`, `oauth` → `OAuth`,
 `opcache` → `OPCache`, `openapi` → `OpenApi`, `swagger-ui` → `SwaggerUI`, `webauthn` → `WebAuthn` and
 `websocket` → `WebSocket`; `websocket-client` → `WebsocketClient`, `websocket-tls` → `WebsocketTls`,
 `webauthn-metadata` → `WebauthnMetadata` and `metrics-statsd` → `MetricsStatsd` are
@@ -441,4 +441,5 @@ tests/
 | Rich notification content (images, action buttons, interruption levels) | Application layer — extend `PushMessage`'s `data` map or the driver payload builder if a real need arises |
 | A general-purpose JWT library | `Es256Signer`/`Rs256Signer` are intentionally narrow; see Design Decisions |
 | Storing `PushSubscription`s, pruning 404/410 subscriptions, service-worker code | Application layer |
-| SMS / other channels | Application layer or their own future modules |
+| SMS | `ez-php/sms` (delivered as a notification through `ez-php/notification`'s `sms` channel) |
+| Other channels | Application layer or their own future modules |
